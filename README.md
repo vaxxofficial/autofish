@@ -2,7 +2,7 @@
 
 A simple, feature-rich Minecraft mod built for the Fabric loader (version 1.21.11) that automatically casts and reels in your fishing rod. It includes configurable randomization to mimic human behavior, specific enhancements to avoid AFK detection, and support for mythical fishing for Hypixel main lobby fishing.
 
-The entirety of this mod was coded using AI. Claude built the foundation and Gemini built everything else. This code is almost certainly a mess, but it manages to run. Although I would not recommend changing the default timing settings, you are technically able to. This project took ~12 hours to create the initial commit, and is "my" first ever attempt to create a useful mod. Many aspects of this mod are miticuously thought over as to make the user appear as human as possible, but many aspects also are **not**. Use at your own risk.
+The entirety of this mod was coded using AI. Claude's Sonnet 4.6 built the foundation and Gemini's 3.1 Pro built everything else. This code is almost certainly a mess, but it manages to run. Although I would not recommend changing the default timing settings, you are technically able to. This project took ~12 hours to create the initial commit, and is "my" first ever attempt to create a useful mod. Many aspects of this mod are miticuously thought over as to make the user appear as human as possible, but many aspects also are **not**. Use at your own risk.
 
 ## Features
 
