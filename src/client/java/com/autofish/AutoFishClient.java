@@ -1,10 +1,11 @@
 package com.autofish;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
@@ -20,6 +21,9 @@ import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Random;
+
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
 @Environment(EnvType.CLIENT)
 public class AutoFishClient implements ClientModInitializer {
@@ -77,16 +81,160 @@ public class AutoFishClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(ClientCommandManager.literal("autofish")
-                .then(ClientCommandManager.literal("debug")
+            dispatcher.register(literal("autofish")
+                .then(literal("debug")
                     .executes(context -> {
                         debugMode = !debugMode;
                         context.getSource().sendFeedback(Text.literal("§8[§bAutoFish§8] §7Debug mode " + (debugMode ? "§aEnabled" : "§cDisabled")));
                         return 1;
                     })
                 )
+                // Mod Toggle Commands
+                .then(literal("toggle").executes(context -> { setEnabled(!enabled, MinecraftClient.getInstance(), context.getSource()); return 1; }))
+                .then(literal("on").executes(context -> { setEnabled(true, MinecraftClient.getInstance(), context.getSource()); return 1; }))
+                .then(literal("off").executes(context -> { setEnabled(false, MinecraftClient.getInstance(), context.getSource()); return 1; }))
+                
+                // Reaction Commands
+                .then(literal("minreaction").then(argument("value", IntegerArgumentType.integer(0, 20)).executes(context -> setMinReaction(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
+                .then(literal("maxreaction").then(argument("value", IntegerArgumentType.integer(0, 20)).executes(context -> setMaxReaction(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
+                .then(literal("reaction")
+                    .then(argument("min", IntegerArgumentType.integer(0, 20))
+                        .then(argument("max", IntegerArgumentType.integer(0, 20))
+                            .executes(context -> setReaction(context.getSource(), IntegerArgumentType.getInteger(context, "min"), IntegerArgumentType.getInteger(context, "max")))
+                        )
+                    )
+                )
+
+                // Recast Commands
+                .then(literal("minrecast").then(argument("value", IntegerArgumentType.integer(0, 60)).executes(context -> setMinRecast(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
+                .then(literal("maxrecast").then(argument("value", IntegerArgumentType.integer(0, 60)).executes(context -> setMaxRecast(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
+                .then(literal("recast")
+                    .then(argument("min", IntegerArgumentType.integer(0, 60))
+                        .then(argument("max", IntegerArgumentType.integer(0, 60))
+                            .executes(context -> setRecast(context.getSource(), IntegerArgumentType.getInteger(context, "min"), IntegerArgumentType.getInteger(context, "max")))
+                        )
+                    )
+                )
+
+                // Jump Movement Commands
+                .then(literal("jump")
+                    .then(literal("toggle").executes(context -> setJump(context.getSource(), !AutoFishConfig.INSTANCE.jumpMovement)))
+                    .then(literal("on").executes(context -> setJump(context.getSource(), true)))
+                    .then(literal("off").executes(context -> setJump(context.getSource(), false)))
+                )
+
+                // Random Movement Commands
+                .then(literal("movement")
+                    .then(literal("toggle").executes(context -> setMovement(context.getSource(), !AutoFishConfig.INSTANCE.randomMovement)))
+                    .then(literal("on").executes(context -> setMovement(context.getSource(), true)))
+                    .then(literal("off").executes(context -> setMovement(context.getSource(), false)))
+                )
+
+                // Catch Mythical Commands
+                .then(literal("mythical")
+                    .then(literal("toggle").executes(context -> setMythical(context.getSource(), !AutoFishConfig.INSTANCE.catchMythical)))
+                    .then(literal("on").executes(context -> setMythical(context.getSource(), true)))
+                    .then(literal("off").executes(context -> setMythical(context.getSource(), false)))
+                )
             );
         });
+    }
+
+    // --- Command Helper Methods ---
+    
+    private void setEnabled(boolean newState, MinecraftClient client, FabricClientCommandSource source) {
+        enabled = newState;
+        if (enabled && client != null && client.player != null) {
+            if (client.player.fishHook != null) {
+                setState(FishingState.SETTLING);
+                settlingTimeout = 60;
+            } else {
+                setState(FishingState.IDLE);
+            }
+            tickDelay = 0;
+        } else if (!enabled && client != null) {
+            resetAntiAfk(client);
+        }
+        
+        Text msg = Text.literal("§8[§bAutoFish§8] " + (enabled ? "§aEnabled" : "§cDisabled"));
+        if (source != null) {
+            source.sendFeedback(msg);
+        } else if (client != null && client.player != null) {
+            client.player.sendMessage(msg, true);
+        }
+    }
+
+    private int setMinReaction(FabricClientCommandSource source, int val) {
+        AutoFishConfig.INSTANCE.minReactionTime = val;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Min Reaction set to §a" + val + " ticks"));
+        return 1;
+    }
+
+    private int setMaxReaction(FabricClientCommandSource source, int val) {
+        AutoFishConfig.INSTANCE.maxReactionTime = val;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Max Reaction set to §a" + val + " ticks"));
+        return 1;
+    }
+
+    private int setReaction(FabricClientCommandSource source, int min, int max) {
+        AutoFishConfig.INSTANCE.minReactionTime = min;
+        AutoFishConfig.INSTANCE.maxReactionTime = max;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Reaction set to §a" + min + " - " + max + " ticks"));
+        return 1;
+    }
+
+    private int setMinRecast(FabricClientCommandSource source, int val) {
+        AutoFishConfig.INSTANCE.minRecastDelay = val;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Min Recast set to §a" + val + " ticks"));
+        return 1;
+    }
+
+    private int setMaxRecast(FabricClientCommandSource source, int val) {
+        AutoFishConfig.INSTANCE.maxRecastDelay = val;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Max Recast set to §a" + val + " ticks"));
+        return 1;
+    }
+
+    private int setRecast(FabricClientCommandSource source, int min, int max) {
+        AutoFishConfig.INSTANCE.minRecastDelay = min;
+        AutoFishConfig.INSTANCE.maxRecastDelay = max;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Recast set to §a" + min + " - " + max + " ticks"));
+        return 1;
+    }
+
+    private int setJump(FabricClientCommandSource source, boolean state) {
+        AutoFishConfig.INSTANCE.jumpMovement = state;
+        if (state && AutoFishConfig.INSTANCE.randomMovement) {
+            AutoFishConfig.INSTANCE.randomMovement = false;
+            source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Movement turned §coff§7 due to mutual exclusivity."));
+        }
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Jump Movement " + (state ? "§aEnabled" : "§cDisabled")));
+        return 1;
+    }
+
+    private int setMovement(FabricClientCommandSource source, boolean state) {
+        AutoFishConfig.INSTANCE.randomMovement = state;
+        if (state && AutoFishConfig.INSTANCE.jumpMovement) {
+            AutoFishConfig.INSTANCE.jumpMovement = false;
+            source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Jump turned §coff§7 due to mutual exclusivity."));
+        }
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Random Movement " + (state ? "§aEnabled" : "§cDisabled")));
+        return 1;
+    }
+
+    private int setMythical(FabricClientCommandSource source, boolean state) {
+        AutoFishConfig.INSTANCE.catchMythical = state;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Catch Mythical " + (state ? "§aEnabled" : "§cDisabled")));
+        return 1;
     }
 
     public void setState(FishingState newState) {
@@ -332,15 +480,7 @@ public class AutoFishClient implements ClientModInitializer {
 
     private void handleKeybinds(MinecraftClient client) {
         while (toggleKey.wasPressed()) {
-            enabled = !enabled;
-            if (enabled && client.player != null) {
-                if (client.player.fishHook != null) {
-                    setState(FishingState.SETTLING);
-                    settlingTimeout = 60;
-                } else setState(FishingState.IDLE);
-                tickDelay = 0;
-            } else resetAntiAfk(client);
-            if (client.player != null) client.player.sendMessage(Text.literal("§8[§bAutoFish§8] " + (enabled ? "§aEnabled" : "§cDisabled")), true);
+            setEnabled(!enabled, client, null);
         }
         while (configKey.wasPressed()) client.setScreen(AutoFishScreen.createConfigScreen(client.currentScreen));
     }
