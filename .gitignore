@@ -1,0 +1,15 @@
+# Gradle and Build directories
+.gradle/
+build/
+
+# IDE files (IntelliJ, VSCode, Eclipse)
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+*.settings/
+
+# macOS generated files
+.DS_Store
+run/

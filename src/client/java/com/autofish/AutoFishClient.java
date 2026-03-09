@@ -1,0 +1,360 @@
+package com.autofish;
+
+import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ChatScreen;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.network.ServerInfo;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.entity.projectile.FishingBobberEntity;
+import net.minecraft.item.FishingRodItem;
+import net.minecraft.text.Text;
+import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
+import org.lwjgl.glfw.GLFW;
+
+import java.util.Random;
+
+@Environment(EnvType.CLIENT)
+public class AutoFishClient implements ClientModInitializer {
+
+    public static AutoFishClient INSTANCE;
+
+    public static final KeyBinding.Category AUTOFISH_CATEGORY = KeyBinding.Category.create(Identifier.of("autofish", "category"));
+
+    private static KeyBinding toggleKey;
+    private static KeyBinding configKey;
+
+    public boolean enabled = false;
+    public boolean debugMode = false;
+    private boolean wasHoldingRod = false;
+    public FishingState state = FishingState.IDLE;
+    public int tickDelay = 0;
+    
+    public int settlingTimeout = 0;
+    public int soundCooldown = 0;
+
+    // Anti-AFK Variables
+    private int postCatchDelay = 0;
+    private int movementTicksLeft = 0;
+    private boolean isForcingMovement = false;
+    private int jumpTicksLeft = 0;
+    private boolean isForcingJump = false;
+    
+    private int p1Ticks = 0;
+    private int p2Ticks = 0;
+    private int p3Ticks = 0;
+
+    private int mythicalReactionTimer = 0;
+    private int mythicalClickTimer = 0;
+    
+    private int bobberId = -1;
+    private double lastBobberX = 0;
+    private double lastBobberY = 0;
+    private double lastBobberZ = 0;
+    private double bobberSpeedSq = 0;
+
+    private final Random random = new Random();
+
+    private static final int SETTLE_MIN = 20, SETTLE_MAX = 40;
+
+    public enum FishingState { IDLE, SETTLING, WATCHING, REEL_WAIT, RECAST_WAIT, MYTHICAL_WAITING, MYTHICAL_REELING }
+
+    @Override
+    public void onInitializeClient() {
+        INSTANCE = this;
+        AutoFishConfig.load();
+        
+        toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("Toggle AutoFish", GLFW.GLFW_KEY_P, AUTOFISH_CATEGORY));
+        configKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("Open Settings Menu", GLFW.GLFW_KEY_O, AUTOFISH_CATEGORY));
+
+        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            dispatcher.register(ClientCommandManager.literal("autofish")
+                .then(ClientCommandManager.literal("debug")
+                    .executes(context -> {
+                        debugMode = !debugMode;
+                        context.getSource().sendFeedback(Text.literal("§8[§bAutoFish§8] §7Debug mode " + (debugMode ? "§aEnabled" : "§cDisabled")));
+                        return 1;
+                    })
+                )
+            );
+        });
+    }
+
+    public void setState(FishingState newState) {
+        if (this.debugMode && this.state != newState) {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null) {
+                client.player.sendMessage(Text.literal("§8[§bAutoFish Debug§8] §7State: §e" + newState.name()), false);
+            }
+        }
+        this.state = newState;
+    }
+
+    public static void onSoundDetected(String soundName, float pitch, float volume, double soundX, double soundY, double soundZ) {
+        if (INSTANCE == null || !INSTANCE.enabled || INSTANCE.state != FishingState.WATCHING || INSTANCE.soundCooldown > 0) return;
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) return;
+        if (soundName.contains("block.note_block.pling") && pitch == 1.0f) {
+            double distSq = client.player.squaredDistanceTo(soundX, soundY, soundZ);
+            if (distSq < 1.0) {
+                INSTANCE.soundCooldown = 40; 
+                INSTANCE.setState(FishingState.REEL_WAIT);
+                INSTANCE.tickDelay = INSTANCE.rand(AutoFishConfig.INSTANCE.minReactionTime, AutoFishConfig.INSTANCE.maxReactionTime);
+            }
+        }
+    }
+
+    private boolean isHypixel(MinecraftClient client) {
+        if (client.isInSingleplayer()) return false;
+        if (client.world != null && client.world.getScoreboard() != null) {
+            for (net.minecraft.scoreboard.ScoreboardObjective obj : client.world.getScoreboard().getObjectives()) {
+                if (obj.getDisplayName().getString().toLowerCase().contains("hypixel") || obj.getDisplayName().getString().toLowerCase().contains("skyblock")) return true;
+            }
+        }
+        ServerInfo server = client.getCurrentServerEntry();
+        if (server != null && server.address != null) {
+            String ip = server.address.toLowerCase();
+            if (ip.contains("hypixel") || ip.contains("catgirls.xyz")) return true;
+        }
+        return false;
+    }
+
+    private void tick(MinecraftClient client) {
+        handleKeybinds(client);
+        
+        if (soundCooldown > 0) soundCooldown--;
+        
+        ClientPlayerEntity player = client.player;
+        if (player == null) {
+            if (enabled) resetAntiAfk(client);
+            return;
+        }
+
+        boolean holdingRod = isHoldingFishingRod(player);
+        if (enabled && holdingRod && !wasHoldingRod) {
+            if (player.fishHook != null) {
+                setState(FishingState.SETTLING);
+                tickDelay = rand(SETTLE_MIN, SETTLE_MAX);
+                settlingTimeout = 60;
+            } else {
+                setState(FishingState.IDLE);
+                tickDelay = 5;
+            }
+        }
+        wasHoldingRod = holdingRod;
+
+        if (!enabled) {
+            resetAntiAfk(client);
+            return;
+        }
+
+        if (client.currentScreen != null && !(client.currentScreen instanceof ChatScreen)) {
+            resetAntiAfk(client);
+            return;
+        }
+
+        handleAntiAfk(client);
+
+        FishingBobberEntity bobber = player.fishHook;
+        if (bobber != null) {
+            if (bobber.getId() != bobberId) {
+                bobberId = bobber.getId();
+                lastBobberX = bobber.getX(); lastBobberY = bobber.getY(); lastBobberZ = bobber.getZ();
+                bobberSpeedSq = 0;
+            } else {
+                double dx = bobber.getX() - lastBobberX; double dz = bobber.getZ() - lastBobberZ;
+                bobberSpeedSq = dx * dx + dz * dz; 
+                lastBobberX = bobber.getX(); lastBobberY = bobber.getY(); lastBobberZ = bobber.getZ();
+            }
+        } else {
+            bobberId = -1; bobberSpeedSq = 0;
+        }
+
+        if (tickDelay > 0) {
+            tickDelay--; return;
+        }
+
+        if (!holdingRod) return;
+
+        switch (state) {
+            case IDLE -> {
+                if (bobber == null || bobber.isRemoved()) useRod(client, player);
+                setState(FishingState.SETTLING);
+                tickDelay = rand(SETTLE_MIN, SETTLE_MAX);
+                settlingTimeout = 60;
+            }
+            case SETTLING -> {
+                if (bobber == null || bobber.isRemoved()) {
+                    setState(FishingState.IDLE);
+                    tickDelay = 10;
+                    return;
+                }
+                if (bobberSpeedSq < 0.005 && Math.abs(bobber.getVelocity().getY()) < 0.1) {
+                    setState(FishingState.WATCHING);
+                } else {
+                    settlingTimeout--;
+                    if (settlingTimeout <= 0) setState(FishingState.WATCHING);
+                }
+            }
+            case WATCHING -> {
+                if (bobber == null) {
+                    setState(FishingState.IDLE);
+                    tickDelay = rand(AutoFishConfig.INSTANCE.minRecastDelay, AutoFishConfig.INSTANCE.maxRecastDelay);
+                    return;
+                }
+                if (AutoFishConfig.INSTANCE.catchMythical && bobberSpeedSq > 0.005) {
+                    setState(FishingState.MYTHICAL_WAITING);
+                    mythicalReactionTimer = rand(4, 6);
+                    return;
+                }
+                if (!isHypixel(client) && bobber.getVelocity().getY() <= -0.04) {
+                    setState(FishingState.REEL_WAIT);
+                    tickDelay = rand(AutoFishConfig.INSTANCE.minReactionTime, AutoFishConfig.INSTANCE.maxReactionTime);
+                }
+            }
+            case REEL_WAIT -> {
+                useRod(client, player); 
+                setState(FishingState.RECAST_WAIT);
+                tickDelay = rand(AutoFishConfig.INSTANCE.minRecastDelay, AutoFishConfig.INSTANCE.maxRecastDelay);
+            }
+            case RECAST_WAIT -> {
+                useRod(client, player); 
+                setState(FishingState.SETTLING);
+                tickDelay = rand(SETTLE_MIN, SETTLE_MAX);
+                settlingTimeout = 60;
+                
+                if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
+            }
+            case MYTHICAL_WAITING -> {
+                if (bobber == null || bobber.isRemoved()) {
+                    setState(FishingState.IDLE);
+                    tickDelay = 15;
+                    if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
+                    return;
+                }
+                if (bobberSpeedSq > 0.0005) mythicalReactionTimer = rand(4, 6); 
+                else {
+                    mythicalReactionTimer--; 
+                    if (mythicalReactionTimer <= 0) {
+                        setState(FishingState.MYTHICAL_REELING);
+                        mythicalReactionTimer = rand(3, 5); mythicalClickTimer = 0;
+                    }
+                }
+            }
+            case MYTHICAL_REELING -> {
+                if (bobber == null || bobber.isRemoved()) {
+                    setState(FishingState.IDLE);
+                    tickDelay = 15;
+                    if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
+                    return;
+                }
+                if (bobberSpeedSq <= 0.0005) mythicalReactionTimer = rand(3, 5); 
+                else {
+                    mythicalReactionTimer--; 
+                    if (mythicalReactionTimer <= 0) {
+                        setState(FishingState.MYTHICAL_WAITING);
+                        mythicalReactionTimer = rand(4, 6); return;
+                    }
+                }
+                mythicalClickTimer--;
+                if (mythicalClickTimer <= 0) {
+                    useRod(client, player);
+                    player.setYaw(player.getYaw() + (random.nextFloat() - 0.5f) * 1.0f);
+                    player.setPitch(player.getPitch() + (random.nextFloat() - 0.5f) * 1.0f);
+                    mythicalClickTimer = rand(2, 3);
+                }
+            }
+        }
+    }
+
+    private void handleAntiAfk(MinecraftClient client) {
+        if (postCatchDelay > 0) {
+            postCatchDelay--;
+            if (postCatchDelay == 0) {
+                if (AutoFishConfig.INSTANCE.randomMovement) {
+                    p1Ticks = rand(6, 10);
+                    p2Ticks = rand(12, 20);
+                    p3Ticks = rand(6, 10);
+                    movementTicksLeft = p1Ticks + p2Ticks + p3Ticks;
+                } else if (AutoFishConfig.INSTANCE.jumpMovement) {
+                    jumpTicksLeft = 2; // Jump for exactly 2 ticks
+                }
+            }
+        }
+
+        // Handle walking
+        if (movementTicksLeft > 0) {
+            isForcingMovement = true;
+            if (movementTicksLeft > p2Ticks + p3Ticks) {
+                client.options.leftKey.setPressed(true); client.options.rightKey.setPressed(false);
+            } else if (movementTicksLeft > p3Ticks) {
+                client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(true);
+            } else {
+                client.options.rightKey.setPressed(false); client.options.leftKey.setPressed(true);
+            }
+            movementTicksLeft--;
+        } else if (isForcingMovement) {
+            client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(false);
+            isForcingMovement = false;
+        }
+
+        // Handle jumping
+        if (jumpTicksLeft > 0) {
+            isForcingJump = true;
+            client.options.jumpKey.setPressed(true);
+            jumpTicksLeft--;
+        } else if (isForcingJump) {
+            client.options.jumpKey.setPressed(false);
+            isForcingJump = false;
+        }
+    }
+
+    private void resetAntiAfk(MinecraftClient client) {
+        if (isForcingMovement) {
+            client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(false);
+            movementTicksLeft = 0; isForcingMovement = false;
+        }
+        if (isForcingJump) {
+            client.options.jumpKey.setPressed(false);
+            jumpTicksLeft = 0; isForcingJump = false;
+        }
+        postCatchDelay = 0;
+    }
+
+    private void handleKeybinds(MinecraftClient client) {
+        while (toggleKey.wasPressed()) {
+            enabled = !enabled;
+            if (enabled && client.player != null) {
+                if (client.player.fishHook != null) {
+                    setState(FishingState.SETTLING);
+                    settlingTimeout = 60;
+                } else setState(FishingState.IDLE);
+                tickDelay = 0;
+            } else resetAntiAfk(client);
+            if (client.player != null) client.player.sendMessage(Text.literal("§8[§bAutoFish§8] " + (enabled ? "§aEnabled" : "§cDisabled")), true);
+        }
+        while (configKey.wasPressed()) client.setScreen(AutoFishScreen.createConfigScreen(client.currentScreen));
+    }
+
+    private void useRod(MinecraftClient client, ClientPlayerEntity player) {
+        Hand hand = player.getMainHandStack().getItem() instanceof FishingRodItem ? Hand.MAIN_HAND : Hand.OFF_HAND;
+        client.interactionManager.interactItem(player, hand);
+    }
+
+    private boolean isHoldingFishingRod(ClientPlayerEntity player) {
+        return player.getMainHandStack().getItem() instanceof FishingRodItem || player.getOffHandStack().getItem() instanceof FishingRodItem;
+    }
+
+    private int rand(int min, int max) {
+        return min >= max ? min : min + random.nextInt(max - min + 1);
+    }
+}

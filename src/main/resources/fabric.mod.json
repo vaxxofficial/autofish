@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "autofish",
+  "version": "${version}",
+  "name": "AutoFish",
+  "description": "Automatically casts and reels in your fishing rod with randomized timings.",
+  "authors": ["you"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "modmenu": [
+      "com.autofish.AutoFishModMenu"
+    ],
+    "client": [
+      "com.autofish.AutoFishClient"
+    ]
+  },
+  "mixins": [
+    "autofish.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11"
+  }
+}
