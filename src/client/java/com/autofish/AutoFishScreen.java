@@ -7,6 +7,10 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 public class AutoFishScreen {
 
     public static Screen createConfigScreen(Screen parent) {
@@ -18,10 +22,11 @@ public class AutoFishScreen {
             AutoFishConfig.save();
         });
 
-        ConfigCategory general = builder.getOrCreateCategory(Text.literal("General"));
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
 
-        // New Mod Toggle Entry
+        // --- GENERAL TAB ---
+        ConfigCategory general = builder.getOrCreateCategory(Text.literal("General"));
+
         general.addEntry(entryBuilder.startBooleanToggle(Text.literal("Mod Enabled"), AutoFishClient.INSTANCE.enabled)
                 .setDefaultValue(false)
                 .setTooltip(Text.literal("Turn the AutoFish mod on or off."))
@@ -37,7 +42,7 @@ public class AutoFishScreen {
                 .setTooltip(Text.literal("Randomly walk to avoid AFK. Turns off Jump if enabled."))
                 .setSaveConsumer(newValue -> {
                     AutoFishConfig.INSTANCE.randomMovement = newValue;
-                    if (newValue) AutoFishConfig.INSTANCE.jumpMovement = false; // Mutually exclusive
+                    if (newValue) AutoFishConfig.INSTANCE.jumpMovement = false;
                 })
                 .build());
 
@@ -46,7 +51,7 @@ public class AutoFishScreen {
                 .setTooltip(Text.literal("Randomly jump to avoid AFK. Turns off Walking if enabled."))
                 .setSaveConsumer(newValue -> {
                     AutoFishConfig.INSTANCE.jumpMovement = newValue;
-                    if (newValue) AutoFishConfig.INSTANCE.randomMovement = false; // Mutually exclusive
+                    if (newValue) AutoFishConfig.INSTANCE.randomMovement = false;
                 })
                 .build());
 
@@ -76,6 +81,53 @@ public class AutoFishScreen {
                 .setSaveConsumer(newValue -> AutoFishConfig.INSTANCE.maxRecastDelay = newValue)
                 .build());
 
+        // --- STATISTICS TAB ---
+        ConfigCategory stats = builder.getOrCreateCategory(Text.literal("Statistics"));
+
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal("§l--- Session Statistics ---")).build());
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal("§7Total Catches: §f" + AutoFishStats.INSTANCE.sessionCaught)).build());
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal("§7Mythicals: §f" + AutoFishStats.INSTANCE.sessionMythicals)).build());
+        buildStatEntries(stats, entryBuilder, AutoFishStats.INSTANCE.sessionItems);
+
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal(" ")).build()); // Spacer
+
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal("§l--- Lifetime Statistics ---")).build());
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal("§7Total Catches: §f" + AutoFishStats.INSTANCE.lifetimeCaught)).build());
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal("§7Mythicals: §f" + AutoFishStats.INSTANCE.lifetimeMythicals)).build());
+        buildStatEntries(stats, entryBuilder, AutoFishStats.INSTANCE.lifetimeItems);
+
         return builder.build();
+    }
+
+    private static void buildStatEntries(ConfigCategory category, ConfigEntryBuilder entryBuilder, Map<String, Integer> items) {
+        if (items.isEmpty()) {
+            category.addEntry(entryBuilder.startTextDescription(Text.literal("§8  (No items caught yet)")).build());
+            return;
+        }
+
+        List<Map.Entry<String, Integer>> sorted = new ArrayList<>(items.entrySet());
+        sorted.sort((a, b) -> b.getValue().compareTo(a.getValue()));
+
+        for (Map.Entry<String, Integer> entry : sorted) {
+            String name = entry.getKey();
+            int count = entry.getValue();
+            category.addEntry(entryBuilder.startTextDescription(Text.literal("  §f" + count + "x §7" + toTitleCase(name))).build());
+        }
+    }
+
+    private static String toTitleCase(String text) {
+        if (text == null || text.isEmpty()) return text;
+        StringBuilder result = new StringBuilder();
+        boolean nextTitleCase = true;
+        for (char c : text.toCharArray()) {
+            if (Character.isSpaceChar(c)) {
+                nextTitleCase = true;
+            } else if (nextTitleCase) {
+                c = Character.toUpperCase(c);
+                nextTitleCase = false;
+            }
+            result.append(c);
+        }
+        return result.toString();
     }
 }
