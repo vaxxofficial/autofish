@@ -63,6 +63,12 @@ public class AutoFishScreen {
                 .setTooltip(Text.literal("Attempt to fight and catch mythical fish."))
                 .setSaveConsumer(newValue -> AutoFishConfig.INSTANCE.catchMythical = newValue)
                 .build());
+                
+        general.addEntry(entryBuilder.startBooleanToggle(Text.literal("Limbo Failsafe"), AutoFishConfig.INSTANCE.enableFailsafe)
+                .setDefaultValue(false)
+                .setTooltip(Text.literal("Instantly disable the mod and play an alarm if you are sent to Limbo or your rod breaks."))
+                .setSaveConsumer(newValue -> AutoFishConfig.INSTANCE.enableFailsafe = newValue)
+                .build());
 
         general.addEntry(entryBuilder.startIntSlider(Text.literal("Min Reaction (ticks)"), AutoFishConfig.INSTANCE.minReactionTime, 0, 20)
                 .setDefaultValue(1)

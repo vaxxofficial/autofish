@@ -22,6 +22,7 @@ public class AutoFishConfig {
     public boolean jumpMovement = false;
     public boolean catchMythical = false;
     public boolean trackManualFishing = false;
+    public boolean enableFailsafe = false;
 
     public static void load() {
         if (FILE.exists()) {
@@ -35,6 +36,7 @@ public class AutoFishConfig {
                 INSTANCE.jumpMovement = config.jumpMovement;
                 INSTANCE.catchMythical = config.catchMythical;
                 INSTANCE.trackManualFishing = config.trackManualFishing;
+                INSTANCE.enableFailsafe = config.enableFailsafe;
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -51,7 +53,6 @@ public class AutoFishConfig {
             INSTANCE.minRecastDelay = INSTANCE.maxRecastDelay;
         }
         
-        // Safety check: ensure both aren't saved as true manually in the JSON
         if (INSTANCE.randomMovement && INSTANCE.jumpMovement) {
             INSTANCE.jumpMovement = false; 
         }

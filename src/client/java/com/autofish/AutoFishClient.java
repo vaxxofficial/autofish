@@ -18,6 +18,7 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.command.CommandSource;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.item.FishingRodItem;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
@@ -46,6 +47,10 @@ public class AutoFishClient implements ClientModInitializer {
     
     public int settlingTimeout = 0;
     public int soundCooldown = 0;
+
+    // Failsafe Alarm Variables
+    public int alarmPlayCount = 0;
+    public int alarmTicksLeft = 0;
 
     // Anti-AFK Variables
     private int postCatchDelay = 0;
@@ -94,87 +99,66 @@ public class AutoFishClient implements ClientModInitializer {
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(literal("autofish")
-                .then(literal("debug")
-                    .executes(context -> {
-                        debugMode = !debugMode;
-                        context.getSource().sendFeedback(Text.literal("§8[§bAutoFish§8] §7Debug mode " + (debugMode ? "§aEnabled" : "§cDisabled")));
-                        return 1;
-                    })
-                )
-                // Mod Toggle Commands
+                .then(literal("debug").executes(context -> {
+                    debugMode = !debugMode;
+                    context.getSource().sendFeedback(Text.literal("§8[§bAutoFish§8] §7Debug mode " + (debugMode ? "§aEnabled" : "§cDisabled")));
+                    return 1;
+                }))
                 .then(literal("toggle").executes(context -> { setEnabled(!enabled, MinecraftClient.getInstance(), context.getSource()); return 1; }))
                 .then(literal("on").executes(context -> { setEnabled(true, MinecraftClient.getInstance(), context.getSource()); return 1; }))
                 .then(literal("off").executes(context -> { setEnabled(false, MinecraftClient.getInstance(), context.getSource()); return 1; }))
                 
                 // Reaction Commands
-                .then(literal("minreaction").then(argument("value", IntegerArgumentType.integer(0, 20)).executes(context -> setMinReaction(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
-                .then(literal("maxreaction").then(argument("value", IntegerArgumentType.integer(0, 20)).executes(context -> setMaxReaction(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
                 .then(literal("reaction")
-                    .then(argument("min", IntegerArgumentType.integer(0, 20))
-                        .then(argument("max", IntegerArgumentType.integer(0, 20))
-                            .executes(context -> setReaction(context.getSource(), IntegerArgumentType.getInteger(context, "min"), IntegerArgumentType.getInteger(context, "max")))
-                        )
-                    )
+                    .then(argument("min", IntegerArgumentType.integer(0, 20)).then(argument("max", IntegerArgumentType.integer(0, 20)).executes(context -> setReaction(context.getSource(), IntegerArgumentType.getInteger(context, "min"), IntegerArgumentType.getInteger(context, "max")))))
                 )
 
                 // Recast Commands
-                .then(literal("minrecast").then(argument("value", IntegerArgumentType.integer(0, 60)).executes(context -> setMinRecast(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
-                .then(literal("maxrecast").then(argument("value", IntegerArgumentType.integer(0, 60)).executes(context -> setMaxRecast(context.getSource(), IntegerArgumentType.getInteger(context, "value")))))
                 .then(literal("recast")
-                    .then(argument("min", IntegerArgumentType.integer(0, 60))
-                        .then(argument("max", IntegerArgumentType.integer(0, 60))
-                            .executes(context -> setRecast(context.getSource(), IntegerArgumentType.getInteger(context, "min"), IntegerArgumentType.getInteger(context, "max")))
-                        )
-                    )
+                    .then(argument("min", IntegerArgumentType.integer(0, 60)).then(argument("max", IntegerArgumentType.integer(0, 60)).executes(context -> setRecast(context.getSource(), IntegerArgumentType.getInteger(context, "min"), IntegerArgumentType.getInteger(context, "max")))))
                 )
 
-                // Jump Movement Commands
-                .then(literal("jump")
-                    .then(literal("toggle").executes(context -> setJump(context.getSource(), !AutoFishConfig.INSTANCE.jumpMovement)))
-                    .then(literal("on").executes(context -> setJump(context.getSource(), true)))
-                    .then(literal("off").executes(context -> setJump(context.getSource(), false)))
-                )
-
-                // Random Movement Commands
-                .then(literal("movement")
-                    .then(literal("toggle").executes(context -> setMovement(context.getSource(), !AutoFishConfig.INSTANCE.randomMovement)))
-                    .then(literal("on").executes(context -> setMovement(context.getSource(), true)))
-                    .then(literal("off").executes(context -> setMovement(context.getSource(), false)))
-                )
-
-                // Catch Mythical Commands
-                .then(literal("mythical")
-                    .then(literal("toggle").executes(context -> setMythical(context.getSource(), !AutoFishConfig.INSTANCE.catchMythical)))
-                    .then(literal("on").executes(context -> setMythical(context.getSource(), true)))
-                    .then(literal("off").executes(context -> setMythical(context.getSource(), false)))
-                )
+                // Toggles
+                .then(literal("jump").then(literal("toggle").executes(context -> setJump(context.getSource(), !AutoFishConfig.INSTANCE.jumpMovement))).then(literal("on").executes(context -> setJump(context.getSource(), true))).then(literal("off").executes(context -> setJump(context.getSource(), false))))
+                .then(literal("movement").then(literal("toggle").executes(context -> setMovement(context.getSource(), !AutoFishConfig.INSTANCE.randomMovement))).then(literal("on").executes(context -> setMovement(context.getSource(), true))).then(literal("off").executes(context -> setMovement(context.getSource(), false))))
+                .then(literal("mythical").then(literal("toggle").executes(context -> setMythical(context.getSource(), !AutoFishConfig.INSTANCE.catchMythical))).then(literal("on").executes(context -> setMythical(context.getSource(), true))).then(literal("off").executes(context -> setMythical(context.getSource(), false))))
+                .then(literal("trackmanual").then(literal("toggle").executes(context -> setTrackManual(context.getSource(), !AutoFishConfig.INSTANCE.trackManualFishing))).then(literal("on").executes(context -> setTrackManual(context.getSource(), true))).then(literal("off").executes(context -> setTrackManual(context.getSource(), false))))
                 
-                // Track Manual Fishing Command
-                .then(literal("trackmanual")
-                    .then(literal("toggle").executes(context -> setTrackManual(context.getSource(), !AutoFishConfig.INSTANCE.trackManualFishing)))
-                    .then(literal("on").executes(context -> setTrackManual(context.getSource(), true)))
-                    .then(literal("off").executes(context -> setTrackManual(context.getSource(), false)))
+                // Failsafe Command
+                .then(literal("failsafe")
+                    .then(literal("toggle").executes(context -> setFailsafe(context.getSource(), !AutoFishConfig.INSTANCE.enableFailsafe)))
+                    .then(literal("on").executes(context -> setFailsafe(context.getSource(), true)))
+                    .then(literal("off").executes(context -> setFailsafe(context.getSource(), false)))
                 )
                 
                 // Stats Commands
                 .then(literal("stats")
                     .then(argument("period", StringArgumentType.word())
                         .suggests((context, builder) -> CommandSource.suggestMatching(new String[]{"lifetime", "session"}, builder))
-                        .executes(context -> {
-                            StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), "all");
-                            return 1;
-                        })
+                        .executes(context -> { StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), "all"); return 1; })
                         .then(argument("category", StringArgumentType.word())
                             .suggests((context, builder) -> CommandSource.suggestMatching(new String[]{"all", "water", "lava", "ice", "mythical", "creatures", "coins"}, builder))
-                            .executes(context -> {
-                                StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), StringArgumentType.getString(context, "category"));
-                                return 1;
-                            })
+                            .executes(context -> { StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), StringArgumentType.getString(context, "category")); return 1; })
                         )
                     )
                 )
             );
         });
+    }
+
+    public void triggerFailsafe(String reason) {
+        if (!enabled || !AutoFishConfig.INSTANCE.enableFailsafe) return;
+        MinecraftClient client = MinecraftClient.getInstance();
+        
+        setEnabled(false, client, null); // Instantly kill the mod to stop casting
+        
+        if (client.player != null) {
+            client.player.sendMessage(Text.literal("§c§l[AutoFish Failsafe] §f" + reason), false);
+        }
+        
+        // Trigger the 5-beep alarm
+        alarmPlayCount = 5;
+        alarmTicksLeft = 0;
     }
 
     // --- Command Helper Methods ---
@@ -201,92 +185,47 @@ public class AutoFishClient implements ClientModInitializer {
         }
     }
 
-    private int setMinReaction(FabricClientCommandSource source, int val) {
-        AutoFishConfig.INSTANCE.minReactionTime = val;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Min Reaction set to §a" + val + " ticks"));
-        return 1;
-    }
-
-    private int setMaxReaction(FabricClientCommandSource source, int val) {
-        AutoFishConfig.INSTANCE.maxReactionTime = val;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Max Reaction set to §a" + val + " ticks"));
-        return 1;
-    }
-
     private int setReaction(FabricClientCommandSource source, int min, int max) {
-        AutoFishConfig.INSTANCE.minReactionTime = min;
-        AutoFishConfig.INSTANCE.maxReactionTime = max;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Reaction set to §a" + min + " - " + max + " ticks"));
-        return 1;
-    }
-
-    private int setMinRecast(FabricClientCommandSource source, int val) {
-        AutoFishConfig.INSTANCE.minRecastDelay = val;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Min Recast set to §a" + val + " ticks"));
-        return 1;
-    }
-
-    private int setMaxRecast(FabricClientCommandSource source, int val) {
-        AutoFishConfig.INSTANCE.maxRecastDelay = val;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Max Recast set to §a" + val + " ticks"));
-        return 1;
+        AutoFishConfig.INSTANCE.minReactionTime = min; AutoFishConfig.INSTANCE.maxReactionTime = max; AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Reaction set to §a" + min + " - " + max + " ticks")); return 1;
     }
 
     private int setRecast(FabricClientCommandSource source, int min, int max) {
-        AutoFishConfig.INSTANCE.minRecastDelay = min;
-        AutoFishConfig.INSTANCE.maxRecastDelay = max;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Recast set to §a" + min + " - " + max + " ticks"));
-        return 1;
+        AutoFishConfig.INSTANCE.minRecastDelay = min; AutoFishConfig.INSTANCE.maxRecastDelay = max; AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Recast set to §a" + min + " - " + max + " ticks")); return 1;
     }
 
     private int setJump(FabricClientCommandSource source, boolean state) {
         AutoFishConfig.INSTANCE.jumpMovement = state;
-        if (state && AutoFishConfig.INSTANCE.randomMovement) {
-            AutoFishConfig.INSTANCE.randomMovement = false;
-            source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Movement turned §coff§7 due to mutual exclusivity."));
-        }
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Jump Movement " + (state ? "§aEnabled" : "§cDisabled")));
-        return 1;
+        if (state && AutoFishConfig.INSTANCE.randomMovement) AutoFishConfig.INSTANCE.randomMovement = false;
+        AutoFishConfig.save(); source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Jump Movement " + (state ? "§aEnabled" : "§cDisabled"))); return 1;
     }
 
     private int setMovement(FabricClientCommandSource source, boolean state) {
         AutoFishConfig.INSTANCE.randomMovement = state;
-        if (state && AutoFishConfig.INSTANCE.jumpMovement) {
-            AutoFishConfig.INSTANCE.jumpMovement = false;
-            source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Jump turned §coff§7 due to mutual exclusivity."));
-        }
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Random Movement " + (state ? "§aEnabled" : "§cDisabled")));
-        return 1;
+        if (state && AutoFishConfig.INSTANCE.jumpMovement) AutoFishConfig.INSTANCE.jumpMovement = false;
+        AutoFishConfig.save(); source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Random Movement " + (state ? "§aEnabled" : "§cDisabled"))); return 1;
     }
 
     private int setMythical(FabricClientCommandSource source, boolean state) {
-        AutoFishConfig.INSTANCE.catchMythical = state;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Catch Mythical " + (state ? "§aEnabled" : "§cDisabled")));
-        return 1;
+        AutoFishConfig.INSTANCE.catchMythical = state; AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Catch Mythical " + (state ? "§aEnabled" : "§cDisabled"))); return 1;
     }
     
     private int setTrackManual(FabricClientCommandSource source, boolean state) {
-        AutoFishConfig.INSTANCE.trackManualFishing = state;
-        AutoFishConfig.save();
-        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Track Manual Fishing " + (state ? "§aEnabled" : "§cDisabled")));
-        return 1;
+        AutoFishConfig.INSTANCE.trackManualFishing = state; AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Track Manual Fishing " + (state ? "§aEnabled" : "§cDisabled"))); return 1;
+    }
+
+    private int setFailsafe(FabricClientCommandSource source, boolean state) {
+        AutoFishConfig.INSTANCE.enableFailsafe = state; AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Limbo Failsafe " + (state ? "§aEnabled" : "§cDisabled"))); return 1;
     }
 
     public void setState(FishingState newState) {
         if (this.debugMode && this.state != newState) {
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player != null) {
-                client.player.sendMessage(Text.literal("§8[§bAutoFish Debug§8] §7State: §e" + newState.name()), false);
-            }
+            if (client.player != null) client.player.sendMessage(Text.literal("§8[§bAutoFish Debug§8] §7State: §e" + newState.name()), false);
         }
         this.state = newState;
     }
@@ -323,6 +262,19 @@ public class AutoFishClient implements ClientModInitializer {
     private void tick(MinecraftClient client) {
         handleKeybinds(client);
         
+        // Handle the Failsafe Alarm Beeps
+        if (alarmPlayCount > 0) {
+            if (alarmTicksLeft <= 0) {
+                if (client.player != null) {
+                    client.player.playSound(SoundEvents.BLOCK_NOTE_BLOCK_PLING.value(), 1.0f, 1.0f);
+                }
+                alarmPlayCount--;
+                alarmTicksLeft = 5; // Wait 5 ticks (1/4th of a second) before next beep
+            } else {
+                alarmTicksLeft--;
+            }
+        }
+
         if (soundCooldown > 0) soundCooldown--;
         
         ClientPlayerEntity player = client.player;
@@ -332,6 +284,12 @@ public class AutoFishClient implements ClientModInitializer {
         }
 
         boolean holdingRod = isHoldingFishingRod(player);
+        
+        // TRIGGER FAILSAFE: We were holding a rod, the mod was enabled, but now the rod is gone!
+        if (enabled && !holdingRod && wasHoldingRod) {
+            triggerFailsafe("Fishing rod broke or was unequipped!");
+        }
+
         if (enabled && holdingRod && !wasHoldingRod) {
             if (player.fishHook != null) {
                 setState(FishingState.SETTLING);
@@ -423,7 +381,6 @@ public class AutoFishClient implements ClientModInitializer {
                 setState(FishingState.SETTLING);
                 tickDelay = rand(SETTLE_MIN, SETTLE_MAX);
                 settlingTimeout = 60;
-                
                 if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
             }
             case MYTHICAL_WAITING -> {
@@ -473,59 +430,39 @@ public class AutoFishClient implements ClientModInitializer {
             postCatchDelay--;
             if (postCatchDelay == 0) {
                 if (AutoFishConfig.INSTANCE.randomMovement) {
-                    p1Ticks = rand(6, 10);
-                    p2Ticks = rand(12, 20);
-                    p3Ticks = rand(6, 10);
+                    p1Ticks = rand(6, 10); p2Ticks = rand(12, 20); p3Ticks = rand(6, 10);
                     movementTicksLeft = p1Ticks + p2Ticks + p3Ticks;
                 } else if (AutoFishConfig.INSTANCE.jumpMovement) {
-                    jumpTicksLeft = 2; // Jump for exactly 2 ticks
+                    jumpTicksLeft = 2; 
                 }
             }
         }
 
-        // Handle walking
         if (movementTicksLeft > 0) {
             isForcingMovement = true;
-            if (movementTicksLeft > p2Ticks + p3Ticks) {
-                client.options.leftKey.setPressed(true); client.options.rightKey.setPressed(false);
-            } else if (movementTicksLeft > p3Ticks) {
-                client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(true);
-            } else {
-                client.options.rightKey.setPressed(false); client.options.leftKey.setPressed(true);
-            }
+            if (movementTicksLeft > p2Ticks + p3Ticks) { client.options.leftKey.setPressed(true); client.options.rightKey.setPressed(false); }
+            else if (movementTicksLeft > p3Ticks) { client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(true); }
+            else { client.options.rightKey.setPressed(false); client.options.leftKey.setPressed(true); }
             movementTicksLeft--;
         } else if (isForcingMovement) {
-            client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(false);
-            isForcingMovement = false;
+            client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(false); isForcingMovement = false;
         }
 
-        // Handle jumping
         if (jumpTicksLeft > 0) {
-            isForcingJump = true;
-            client.options.jumpKey.setPressed(true);
-            jumpTicksLeft--;
+            isForcingJump = true; client.options.jumpKey.setPressed(true); jumpTicksLeft--;
         } else if (isForcingJump) {
-            client.options.jumpKey.setPressed(false);
-            isForcingJump = false;
+            client.options.jumpKey.setPressed(false); isForcingJump = false;
         }
     }
 
     private void resetAntiAfk(MinecraftClient client) {
-        if (isForcingMovement) {
-            client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(false);
-            movementTicksLeft = 0; isForcingMovement = false;
-        }
-        if (isForcingJump) {
-            client.options.jumpKey.setPressed(false);
-            jumpTicksLeft = 0; isForcingJump = false;
-        }
+        if (isForcingMovement) { client.options.leftKey.setPressed(false); client.options.rightKey.setPressed(false); movementTicksLeft = 0; isForcingMovement = false; }
+        if (isForcingJump) { client.options.jumpKey.setPressed(false); jumpTicksLeft = 0; isForcingJump = false; }
         postCatchDelay = 0;
     }
 
     private void handleKeybinds(MinecraftClient client) {
-        while (toggleKey.wasPressed()) {
-            setEnabled(!enabled, client, null);
-        }
+        while (toggleKey.wasPressed()) setEnabled(!enabled, client, null);
         while (configKey.wasPressed()) client.setScreen(AutoFishScreen.createConfigScreen(client.currentScreen));
     }
 
@@ -538,7 +475,5 @@ public class AutoFishClient implements ClientModInitializer {
         return player.getMainHandStack().getItem() instanceof FishingRodItem || player.getOffHandStack().getItem() instanceof FishingRodItem;
     }
 
-    private int rand(int min, int max) {
-        return min >= max ? min : min + random.nextInt(max - min + 1);
-    }
+    private int rand(int min, int max) { return min >= max ? min : min + random.nextInt(max - min + 1); }
 }

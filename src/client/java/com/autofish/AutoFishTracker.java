@@ -32,10 +32,15 @@ public class AutoFishTracker {
     public static void onMessage(String text) {
         if (AutoFishClient.INSTANCE == null) return;
         
-        // Only ignore the catch if AutoFish is OFF *and* Track Manual Fishing is OFF
-        if (!AutoFishClient.INSTANCE.enabled && !AutoFishConfig.INSTANCE.trackManualFishing) return;
-
         String plain = text.replaceAll("§.", "");
+        String lower = plain.toLowerCase();
+        
+        // Immediately check for Limbo messages
+        if (lower.contains("limbo") && (lower.contains("spawned in") || lower.contains("put in"))) {
+            AutoFishClient.INSTANCE.triggerFailsafe("You were sent to Limbo!");
+        }
+        
+        if (!AutoFishClient.INSTANCE.enabled && !AutoFishConfig.INSTANCE.trackManualFishing) return;
         
         Matcher mCurr = Pattern.compile("You caught (?:an? )?([\\d,]+) (.*)!").matcher(plain);
         if (mCurr.matches()) {
