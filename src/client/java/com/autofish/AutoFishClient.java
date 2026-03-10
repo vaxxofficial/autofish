@@ -15,6 +15,7 @@ import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.command.CommandSource;
 import net.minecraft.entity.projectile.FishingBobberEntity;
 import net.minecraft.item.FishingRodItem;
 import net.minecraft.text.Text;
@@ -151,11 +152,13 @@ public class AutoFishClient implements ClientModInitializer {
                 // Stats Commands
                 .then(literal("stats")
                     .then(argument("period", StringArgumentType.word())
+                        .suggests((context, builder) -> CommandSource.suggestMatching(new String[]{"lifetime", "session"}, builder))
                         .executes(context -> {
                             StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), "all");
                             return 1;
                         })
                         .then(argument("category", StringArgumentType.word())
+                            .suggests((context, builder) -> CommandSource.suggestMatching(new String[]{"all", "water", "lava", "ice", "mythical", "creatures", "coins"}, builder))
                             .executes(context -> {
                                 StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), StringArgumentType.getString(context, "category"));
                                 return 1;

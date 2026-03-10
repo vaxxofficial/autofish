@@ -6,6 +6,11 @@ import java.util.*;
 
 public class StatsPrinter {
 
+    private static final List<String> MYTHICAL_ORDER = Arrays.asList(
+        "ember of helios", "dust of selene", "shadow of nyx", "heart of aphrodite",
+        "spark of zeus", "spirit of demeter", "automaton of daedalus", "wrath of hades"
+    );
+
     public static void print(FabricClientCommandSource source, String period, String filter) {
         period = period.toLowerCase();
         filter = filter.toLowerCase();
@@ -74,13 +79,34 @@ public class StatsPrinter {
                 source.sendFeedback(Text.literal("  §b" + cat + ": §7(" + catTotal + " total)"));
                 
                 List<Map.Entry<String, Integer>> sorted = new ArrayList<>(catItems.entrySet());
-                sorted.sort((a, b) -> b.getValue().compareTo(a.getValue())); 
+                sorted.sort((a, b) -> {
+                    String nameA = a.getKey();
+                    String nameB = b.getKey();
+                    AutoFishTracker.CategoryData dataA = AutoFishTracker.ITEM_DATA.get(nameA);
+                    AutoFishTracker.CategoryData dataB = AutoFishTracker.ITEM_DATA.get(nameB);
+
+                    boolean isGlobalA = dataA != null && dataA.environment.equals("global");
+                    boolean isGlobalB = dataB != null && dataB.environment.equals("global");
+                    
+                    boolean isSharedA = dataA != null && dataA.environment.equals("water/ice");
+                    boolean isSharedB = dataB != null && dataB.environment.equals("water/ice");
+
+                    // Globals at the very bottom
+                    if (isGlobalA && !isGlobalB) return 1;
+                    if (!isGlobalA && isGlobalB) return -1;
+                    
+                    // Shared at the bottom, but above globals
+                    if (isSharedA && !isSharedB) return 1;
+                    if (!isSharedA && isSharedB) return -1;
+
+                    // Otherwise sort by quantity descending
+                    return b.getValue().compareTo(a.getValue());
+                });
                 
                 for (Map.Entry<String, Integer> item : sorted) {
                     String name = item.getKey();
                     int count = item.getValue();
                     
-                    // Determine if we need to append a combined environment tag
                     String suffix = "";
                     AutoFishTracker.CategoryData itemData = AutoFishTracker.ITEM_DATA.get(name);
                     if (itemData != null) {
@@ -110,7 +136,6 @@ public class StatsPrinter {
             if (name.endsWith("coins") && !name.equals("game coins")) {
                 int count = entry.getValue();
                 int val = values.getOrDefault(name, 0);
-                // Dynamically caught coins are always global, so we hardcode the tag here
                 source.sendFeedback(Text.literal("  §f" + count + "x - " + val + " " + name + " §7(water, lava, & ice)"));
                 found = true;
             }
@@ -152,7 +177,32 @@ public class StatsPrinter {
                 source.sendFeedback(Text.literal("  §b" + rarity + ": §7(" + rTotal + " total)"));
                 
                 List<Map.Entry<String, Integer>> sorted = new ArrayList<>(rarityWeights.get(rarity).entrySet());
-                sorted.sort((a, b) -> b.getValue().compareTo(a.getValue()));
+                sorted.sort((a, b) -> {
+                    String[] partsA = a.getKey().split("kg ", 2);
+                    String[] partsB = b.getKey().split("kg ", 2);
+                    
+                    if (partsA.length < 2 || partsB.length < 2) return b.getValue().compareTo(a.getValue());
+                    
+                    String nameA = partsA[1];
+                    String nameB = partsB[1];
+                    
+                    int indexA = MYTHICAL_ORDER.indexOf(nameA);
+                    int indexB = MYTHICAL_ORDER.indexOf(nameB);
+                    
+                    // Sort by in-game order
+                    if (indexA != indexB && indexA != -1 && indexB != -1) {
+                        return Integer.compare(indexA, indexB);
+                    }
+                    
+                    // Sort by weight descending
+                    try {
+                        int weightA = Integer.parseInt(partsA[0]);
+                        int weightB = Integer.parseInt(partsB[0]);
+                        return Integer.compare(weightB, weightA);
+                    } catch (NumberFormatException e) {
+                        return b.getValue().compareTo(a.getValue());
+                    }
+                });
                 
                 for (Map.Entry<String, Integer> item : sorted) {
                     source.sendFeedback(Text.literal("    §f" + item.getValue() + "x " + item.getKey()));
