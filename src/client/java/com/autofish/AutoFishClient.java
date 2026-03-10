@@ -80,9 +80,6 @@ public class AutoFishClient implements ClientModInitializer {
         AutoFishStats.load();
         AutoFishTracker.loadCategories();
         
-        // This is the line that makes the HUD draw!
-        AutoFishHud.register();
-        
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             AutoFishTracker.onMessage(message.getString());
         });
