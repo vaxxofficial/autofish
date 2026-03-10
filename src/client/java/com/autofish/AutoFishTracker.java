@@ -30,6 +30,9 @@ public class AutoFishTracker {
     }
 
     public static void onMessage(String text) {
+        // Only track stats if the mod is actively running
+        if (AutoFishClient.INSTANCE == null || !AutoFishClient.INSTANCE.enabled) return;
+
         // Strip color codes to make matching text easier
         String plain = text.replaceAll("§.", "");
         
