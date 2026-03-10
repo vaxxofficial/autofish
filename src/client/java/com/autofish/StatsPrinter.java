@@ -79,10 +79,19 @@ public class StatsPrinter {
                 for (Map.Entry<String, Integer> item : sorted) {
                     String name = item.getKey();
                     int count = item.getValue();
+                    
+                    // Determine if we need to append a combined environment tag
+                    String suffix = "";
+                    AutoFishTracker.CategoryData itemData = AutoFishTracker.ITEM_DATA.get(name);
+                    if (itemData != null) {
+                        if (itemData.environment.equals("water/ice")) suffix = " §7(water & ice)";
+                        else if (itemData.environment.equals("global")) suffix = " §7(water, lava, & ice)";
+                    }
+                    
                     if (values != null && values.containsKey(name)) {
-                        source.sendFeedback(Text.literal("    §f" + count + "x - " + values.get(name) + " " + name));
+                        source.sendFeedback(Text.literal("    §f" + count + "x - " + values.get(name) + " " + name + suffix));
                     } else {
-                        source.sendFeedback(Text.literal("    §f" + count + "x " + name));
+                        source.sendFeedback(Text.literal("    §f" + count + "x " + name + suffix));
                     }
                 }
             }
@@ -98,11 +107,11 @@ public class StatsPrinter {
         
         for (Map.Entry<String, Integer> entry : sorted) {
             String name = entry.getKey();
-            // Find specific gamemode coins, exclude the generic general bucket
             if (name.endsWith("coins") && !name.equals("game coins")) {
                 int count = entry.getValue();
                 int val = values.getOrDefault(name, 0);
-                source.sendFeedback(Text.literal("  §f" + count + "x - " + val + " " + name));
+                // Dynamically caught coins are always global, so we hardcode the tag here
+                source.sendFeedback(Text.literal("  §f" + count + "x - " + val + " " + name + " §7(water, lava, & ice)"));
                 found = true;
             }
         }
