@@ -19,11 +19,13 @@ public class AutoFishStats {
     public int lifetimeCaught = 0;
     public int lifetimeMythicals = 0;
     public Map<String, Integer> lifetimeItems = new HashMap<>();
+    public Map<String, Integer> lifetimeItemValues = new HashMap<>();
     public Map<String, Integer> lifetimeMythicalWeights = new HashMap<>();
 
     public transient int sessionCaught = 0;
     public transient int sessionMythicals = 0;
     public transient Map<String, Integer> sessionItems = new HashMap<>();
+    public transient Map<String, Integer> sessionItemValues = new HashMap<>();
     public transient Map<String, Integer> sessionMythicalWeights = new HashMap<>();
 
     public static void load() {
@@ -34,6 +36,7 @@ public class AutoFishStats {
                     INSTANCE.lifetimeCaught = data.lifetimeCaught;
                     INSTANCE.lifetimeMythicals = data.lifetimeMythicals;
                     if (data.lifetimeItems != null) INSTANCE.lifetimeItems = data.lifetimeItems;
+                    if (data.lifetimeItemValues != null) INSTANCE.lifetimeItemValues = data.lifetimeItemValues;
                     if (data.lifetimeMythicalWeights != null) INSTANCE.lifetimeMythicalWeights = data.lifetimeMythicalWeights;
                 }
             } catch (Exception e) {
@@ -67,6 +70,25 @@ public class AutoFishStats {
         sessionCaught++; lifetimeCaught++;
         sessionItems.put(name, sessionItems.getOrDefault(name, 0) + 1);
         lifetimeItems.put(name, lifetimeItems.getOrDefault(name, 0) + 1);
+        save();
+    }
+
+    public void addCurrency(String baseType, String specificType, int amount) {
+        sessionCaught++; lifetimeCaught++;
+        
+        // Add to the general category (e.g., "game coins")
+        sessionItems.put(baseType, sessionItems.getOrDefault(baseType, 0) + 1);
+        lifetimeItems.put(baseType, lifetimeItems.getOrDefault(baseType, 0) + 1);
+        sessionItemValues.put(baseType, sessionItemValues.getOrDefault(baseType, 0) + amount);
+        lifetimeItemValues.put(baseType, lifetimeItemValues.getOrDefault(baseType, 0) + amount);
+
+        // Add to the specific gamemode category (e.g., "arena brawl coins")
+        if (!baseType.equals(specificType)) {
+            sessionItems.put(specificType, sessionItems.getOrDefault(specificType, 0) + 1);
+            lifetimeItems.put(specificType, lifetimeItems.getOrDefault(specificType, 0) + 1);
+            sessionItemValues.put(specificType, sessionItemValues.getOrDefault(specificType, 0) + amount);
+            lifetimeItemValues.put(specificType, lifetimeItemValues.getOrDefault(specificType, 0) + amount);
+        }
         save();
     }
 }

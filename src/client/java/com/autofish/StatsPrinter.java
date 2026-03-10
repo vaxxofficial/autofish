@@ -17,6 +17,7 @@ public class StatsPrinter {
 
         boolean isLifetime = period.equals("lifetime");
         Map<String, Integer> items = isLifetime ? AutoFishStats.INSTANCE.lifetimeItems : AutoFishStats.INSTANCE.sessionItems;
+        Map<String, Integer> values = isLifetime ? AutoFishStats.INSTANCE.lifetimeItemValues : AutoFishStats.INSTANCE.sessionItemValues;
         Map<String, Integer> weights = isLifetime ? AutoFishStats.INSTANCE.lifetimeMythicalWeights : AutoFishStats.INSTANCE.sessionMythicalWeights;
 
         source.sendFeedback(Text.literal("§8[§bAutoFish Stats: " + period.toUpperCase() + "§8]"));
@@ -24,15 +25,17 @@ public class StatsPrinter {
         if (filter.equals("mythical")) {
             printMythical(source, weights);
         } else if (filter.equals("creatures")) {
-            printEnvironment(source, items, "creatures", true);
+            printEnvironment(source, items, values, "creatures", true);
+        } else if (filter.equals("coins")) {
+            printCoins(source, items, values);
         } else {
-            if (filter.equals("all") || filter.equals("water")) printEnvironment(source, items, "water", false);
-            if (filter.equals("all") || filter.equals("lava")) printEnvironment(source, items, "lava", false);
-            if (filter.equals("all") || filter.equals("ice")) printEnvironment(source, items, "ice", false);
+            if (filter.equals("all") || filter.equals("water")) printEnvironment(source, items, values, "water", false);
+            if (filter.equals("all") || filter.equals("lava")) printEnvironment(source, items, values, "lava", false);
+            if (filter.equals("all") || filter.equals("ice")) printEnvironment(source, items, values, "ice", false);
         }
     }
 
-    private static void printEnvironment(FabricClientCommandSource source, Map<String, Integer> items, String targetEnv, boolean onlyCreatures) {
+    private static void printEnvironment(FabricClientCommandSource source, Map<String, Integer> items, Map<String, Integer> values, String targetEnv, boolean onlyCreatures) {
         if (!onlyCreatures) source.sendFeedback(Text.literal("§e" + targetEnv + " -"));
         else source.sendFeedback(Text.literal("§ecreatures -"));
 
@@ -49,7 +52,6 @@ public class StatsPrinter {
             if (!onlyCreatures && data.category.equals("creatures")) continue;
             if (!onlyCreatures && data.category.equals("mythical")) continue;
             
-            // This contains() check handles your Water/Ice overlapping requirement perfectly!
             boolean matchesEnv = data.environment.contains(targetEnv) || data.environment.equals("global");
             if (onlyCreatures) matchesEnv = true;
 
@@ -75,10 +77,37 @@ public class StatsPrinter {
                 sorted.sort((a, b) -> b.getValue().compareTo(a.getValue())); 
                 
                 for (Map.Entry<String, Integer> item : sorted) {
-                    source.sendFeedback(Text.literal("    §f" + item.getValue() + "x " + item.getKey()));
+                    String name = item.getKey();
+                    int count = item.getValue();
+                    if (values != null && values.containsKey(name)) {
+                        source.sendFeedback(Text.literal("    §f" + count + "x - " + values.get(name) + " " + name));
+                    } else {
+                        source.sendFeedback(Text.literal("    §f" + count + "x " + name));
+                    }
                 }
             }
         }
+    }
+
+    private static void printCoins(FabricClientCommandSource source, Map<String, Integer> items, Map<String, Integer> values) {
+        source.sendFeedback(Text.literal("§ecoins breakdown -"));
+        boolean found = false;
+        
+        List<Map.Entry<String, Integer>> sorted = new ArrayList<>(items.entrySet());
+        sorted.sort((a, b) -> b.getValue().compareTo(a.getValue()));
+        
+        for (Map.Entry<String, Integer> entry : sorted) {
+            String name = entry.getKey();
+            // Find specific gamemode coins, exclude the generic general bucket
+            if (name.endsWith("coins") && !name.equals("game coins")) {
+                int count = entry.getValue();
+                int val = values.getOrDefault(name, 0);
+                source.sendFeedback(Text.literal("  §f" + count + "x - " + val + " " + name));
+                found = true;
+            }
+        }
+        
+        if (!found) source.sendFeedback(Text.literal("  §7(No coins caught yet)"));
     }
 
     private static void printMythical(FabricClientCommandSource source, Map<String, Integer> weights) {

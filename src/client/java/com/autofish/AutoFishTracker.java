@@ -30,11 +30,26 @@ public class AutoFishTracker {
     }
 
     public static void onMessage(String text) {
-        // Only track stats if the mod is actively running
         if (AutoFishClient.INSTANCE == null || !AutoFishClient.INSTANCE.enabled) return;
 
-        // Strip color codes to make matching text easier
         String plain = text.replaceAll("§.", "");
+        
+        // Currency & Experience Check
+        Matcher mCurr = Pattern.compile("You caught (?:an? )?([\\d,]+) (.*)!").matcher(plain);
+        if (mCurr.matches()) {
+            String specificType = mCurr.group(2).toLowerCase();
+            if (specificType.endsWith("coins") || specificType.endsWith("experience")) {
+                int amount = Integer.parseInt(mCurr.group(1).replace(",", ""));
+                String baseType = "game coins";
+                if (specificType.endsWith("experience")) {
+                    if (specificType.equals("hypixel experience")) baseType = "hypixel experience";
+                    else if (specificType.equals("guild experience")) baseType = "guild experience";
+                    else baseType = "event experience";
+                }
+                AutoFishStats.INSTANCE.addCurrency(baseType, specificType, amount);
+                return;
+            }
+        }
         
         Matcher m5 = Pattern.compile("You caught (?:an? )?(\\d+)kg (.*)!").matcher(plain);
         if (m5.matches()) {
@@ -54,7 +69,6 @@ public class AutoFishTracker {
             return;
         }
         
-        // This single check now handles both "You caught a (fish)!" and "You caught (network treasure)!"
         Matcher m1 = Pattern.compile("You caught (?:an? )?(.*)!").matcher(plain);
         if (m1.matches()) {
             AutoFishStats.INSTANCE.addItem(m1.group(1).toLowerCase());
