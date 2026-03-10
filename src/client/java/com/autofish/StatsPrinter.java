@@ -10,6 +10,10 @@ public class StatsPrinter {
         "ember of helios", "dust of selene", "shadow of nyx", "heart of aphrodite",
         "spark of zeus", "spirit of demeter", "automaton of daedalus", "wrath of hades"
     );
+    
+    private static final List<String> VALID_FILTERS = Arrays.asList(
+        "all", "water", "lava", "ice", "mythical", "creatures", "coins"
+    );
 
     public static void print(FabricClientCommandSource source, String period, String filter) {
         period = period.toLowerCase();
@@ -17,6 +21,11 @@ public class StatsPrinter {
 
         if (!period.equals("lifetime") && !period.equals("session")) {
             source.sendFeedback(Text.literal("§cInvalid period. Use 'lifetime' or 'session'."));
+            return;
+        }
+        
+        if (!VALID_FILTERS.contains(filter)) {
+            source.sendFeedback(Text.literal("§cInvalid category. Use 'all', 'water', 'lava', 'ice', 'mythical', 'creatures', or 'coins'."));
             return;
         }
 
@@ -189,12 +198,10 @@ public class StatsPrinter {
                     int indexA = MYTHICAL_ORDER.indexOf(nameA);
                     int indexB = MYTHICAL_ORDER.indexOf(nameB);
                     
-                    // Sort by in-game order
                     if (indexA != indexB && indexA != -1 && indexB != -1) {
                         return Integer.compare(indexA, indexB);
                     }
                     
-                    // Sort by weight descending
                     try {
                         int weightA = Integer.parseInt(partsA[0]);
                         int weightB = Integer.parseInt(partsB[0]);
