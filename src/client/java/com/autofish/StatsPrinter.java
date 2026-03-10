@@ -49,6 +49,49 @@ public class StatsPrinter {
         }
     }
 
+    private static String toTitleCase(String text) {
+        if (text == null || text.isEmpty()) return text;
+        StringBuilder result = new StringBuilder();
+        boolean nextTitleCase = true;
+        for (char c : text.toCharArray()) {
+            if (Character.isSpaceChar(c)) {
+                nextTitleCase = true;
+            } else if (nextTitleCase) {
+                c = Character.toUpperCase(c);
+                nextTitleCase = false;
+            }
+            result.append(c);
+        }
+        return result.toString();
+    }
+
+    private static String formatItemName(String name, String category) {
+        if (category.equals("mythical") || name.endsWith("coins") || name.endsWith("experience")) {
+            return toTitleCase(name);
+        }
+        return name; // Returns regular items fully lowercase as requested previously
+    }
+
+    private static String getColor(String name, String category, String rarity) {
+        if (category.equals("fish")) return "§e"; // Yellow
+        if (category.equals("junk")) return "§c"; // Red
+        if (category.equals("plants")) return "§2"; // Dark Green
+        if (category.equals("creatures")) return "§b"; // Light Aqua
+        if (category.equals("mythical")) {
+            if ("common".equals(rarity)) return "§e"; // Yellow
+            if ("uncommon".equals(rarity)) return "§a"; // Green
+            if ("rare".equals(rarity)) return "§b"; // Light Aqua
+            if ("ultra rare".equals(rarity)) return "§d"; // Pink
+        }
+        if (category.equals("treasure")) {
+            if (name.endsWith("coins")) return "§6"; // Gold
+            if (name.contains("event experience")) return "§e"; // Yellow
+            if (name.contains("hypixel experience")) return "§3"; // Dark Aqua
+            return "§a"; // Default regular treasure (Light Green)
+        }
+        return "§f"; // Fallback White
+    }
+
     private static void printEnvironment(FabricClientCommandSource source, Map<String, Integer> items, Map<String, Integer> values, String targetEnv, boolean onlyCreatures) {
         if (!onlyCreatures) source.sendFeedback(Text.literal("§e" + targetEnv + " -"));
         else source.sendFeedback(Text.literal("§ecreatures -"));
@@ -100,15 +143,12 @@ public class StatsPrinter {
                     boolean isSharedA = dataA != null && dataA.environment.equals("water/ice");
                     boolean isSharedB = dataB != null && dataB.environment.equals("water/ice");
 
-                    // Globals at the very bottom
                     if (isGlobalA && !isGlobalB) return 1;
                     if (!isGlobalA && isGlobalB) return -1;
                     
-                    // Shared at the bottom, but above globals
                     if (isSharedA && !isSharedB) return 1;
                     if (!isSharedA && isSharedB) return -1;
 
-                    // Otherwise sort by quantity descending
                     return b.getValue().compareTo(a.getValue());
                 });
                 
@@ -118,15 +158,19 @@ public class StatsPrinter {
                     
                     String suffix = "";
                     AutoFishTracker.CategoryData itemData = AutoFishTracker.ITEM_DATA.get(name);
+                    String color = "§f";
                     if (itemData != null) {
                         if (itemData.environment.equals("water/ice")) suffix = " §7(water & ice)";
                         else if (itemData.environment.equals("global")) suffix = " §7(water, lava, & ice)";
+                        color = getColor(name, itemData.category, itemData.rarity);
                     }
                     
+                    String formattedName = formatItemName(name, itemData != null ? itemData.category : "");
+                    
                     if (values != null && values.containsKey(name)) {
-                        source.sendFeedback(Text.literal("    §f" + count + "x - " + values.get(name) + " " + name + suffix));
+                        source.sendFeedback(Text.literal("    §f" + count + "x - " + values.get(name) + " " + color + formattedName + suffix));
                     } else {
-                        source.sendFeedback(Text.literal("    §f" + count + "x " + name + suffix));
+                        source.sendFeedback(Text.literal("    §f" + count + "x " + color + formattedName + suffix));
                     }
                 }
             }
@@ -145,7 +189,9 @@ public class StatsPrinter {
             if (name.endsWith("coins") && !name.equals("game coins")) {
                 int count = entry.getValue();
                 int val = values.getOrDefault(name, 0);
-                source.sendFeedback(Text.literal("  §f" + count + "x - " + val + " " + name + " §7(water, lava, & ice)"));
+                String formattedName = formatItemName(name, "treasure");
+                String color = getColor(name, "treasure", null);
+                source.sendFeedback(Text.literal("  §f" + count + "x - " + val + " " + color + formattedName + " §7(water, lava, & ice)"));
                 found = true;
             }
         }
@@ -212,7 +258,16 @@ public class StatsPrinter {
                 });
                 
                 for (Map.Entry<String, Integer> item : sorted) {
-                    source.sendFeedback(Text.literal("    §f" + item.getValue() + "x " + item.getKey()));
+                    String[] parts = item.getKey().split("kg ", 2);
+                    if (parts.length == 2) {
+                        String weight = parts[0] + "kg ";
+                        String name = parts[1];
+                        String color = getColor(name, "mythical", rarity);
+                        String formattedName = formatItemName(name, "mythical");
+                        source.sendFeedback(Text.literal("    §f" + item.getValue() + "x " + color + weight + formattedName));
+                    } else {
+                        source.sendFeedback(Text.literal("    §f" + item.getValue() + "x " + item.getKey()));
+                    }
                 }
             }
         }
