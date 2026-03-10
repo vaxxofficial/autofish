@@ -1,6 +1,7 @@
 package com.autofish;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -8,6 +9,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -74,6 +76,15 @@ public class AutoFishClient implements ClientModInitializer {
     public void onInitializeClient() {
         INSTANCE = this;
         AutoFishConfig.load();
+        AutoFishStats.load();
+        AutoFishTracker.loadCategories();
+        
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            AutoFishTracker.onMessage(message.getString());
+        });
+        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
+            AutoFishTracker.onMessage(message.getString());
+        });
         
         toggleKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("Toggle AutoFish", GLFW.GLFW_KEY_P, AUTOFISH_CATEGORY));
         configKey = KeyBindingHelper.registerKeyBinding(new KeyBinding("Open Settings Menu", GLFW.GLFW_KEY_O, AUTOFISH_CATEGORY));
@@ -135,6 +146,22 @@ public class AutoFishClient implements ClientModInitializer {
                     .then(literal("toggle").executes(context -> setMythical(context.getSource(), !AutoFishConfig.INSTANCE.catchMythical)))
                     .then(literal("on").executes(context -> setMythical(context.getSource(), true)))
                     .then(literal("off").executes(context -> setMythical(context.getSource(), false)))
+                )
+                
+                // Stats Commands
+                .then(literal("stats")
+                    .then(argument("period", StringArgumentType.word())
+                        .executes(context -> {
+                            StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), "all");
+                            return 1;
+                        })
+                        .then(argument("category", StringArgumentType.word())
+                            .executes(context -> {
+                                StatsPrinter.print(context.getSource(), StringArgumentType.getString(context, "period"), StringArgumentType.getString(context, "category"));
+                                return 1;
+                            })
+                        )
+                    )
                 )
             );
         });
