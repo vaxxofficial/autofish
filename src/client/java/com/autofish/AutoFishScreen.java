@@ -87,6 +87,14 @@ public class AutoFishScreen {
         // --- STATISTICS TAB ---
         ConfigCategory stats = builder.getOrCreateCategory(Text.literal("Statistics"));
 
+        stats.addEntry(entryBuilder.startBooleanToggle(Text.literal("Track Manual Fishing"), AutoFishConfig.INSTANCE.trackManualFishing)
+                .setDefaultValue(false)
+                .setTooltip(Text.literal("Track stats even when the AutoFish mod is toggled off."))
+                .setSaveConsumer(newValue -> AutoFishConfig.INSTANCE.trackManualFishing = newValue)
+                .build());
+
+        stats.addEntry(entryBuilder.startTextDescription(Text.literal(" ")).build()); // Spacer
+
         stats.addEntry(entryBuilder.startTextDescription(Text.literal("§l--- Session Statistics ---")).build());
         stats.addEntry(entryBuilder.startTextDescription(Text.literal("§7Total Catches: §f" + AutoFishStats.INSTANCE.sessionCaught)).build());
         stats.addEntry(entryBuilder.startTextDescription(Text.literal("§7Mythicals: §f" + AutoFishStats.INSTANCE.sessionMythicals)).build());

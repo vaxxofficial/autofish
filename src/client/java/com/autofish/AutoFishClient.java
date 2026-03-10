@@ -149,6 +149,13 @@ public class AutoFishClient implements ClientModInitializer {
                     .then(literal("off").executes(context -> setMythical(context.getSource(), false)))
                 )
                 
+                // Track Manual Fishing Command
+                .then(literal("trackmanual")
+                    .then(literal("toggle").executes(context -> setTrackManual(context.getSource(), !AutoFishConfig.INSTANCE.trackManualFishing)))
+                    .then(literal("on").executes(context -> setTrackManual(context.getSource(), true)))
+                    .then(literal("off").executes(context -> setTrackManual(context.getSource(), false)))
+                )
+                
                 // Stats Commands
                 .then(literal("stats")
                     .then(argument("period", StringArgumentType.word())
@@ -264,6 +271,13 @@ public class AutoFishClient implements ClientModInitializer {
         AutoFishConfig.INSTANCE.catchMythical = state;
         AutoFishConfig.save();
         source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Catch Mythical " + (state ? "§aEnabled" : "§cDisabled")));
+        return 1;
+    }
+    
+    private int setTrackManual(FabricClientCommandSource source, boolean state) {
+        AutoFishConfig.INSTANCE.trackManualFishing = state;
+        AutoFishConfig.save();
+        source.sendFeedback(Text.literal("§8[§bAutoFish§8] §7Track Manual Fishing " + (state ? "§aEnabled" : "§cDisabled")));
         return 1;
     }
 

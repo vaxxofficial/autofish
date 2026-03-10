@@ -21,6 +21,7 @@ public class AutoFishConfig {
     public boolean randomMovement = false;
     public boolean jumpMovement = false;
     public boolean catchMythical = false;
+    public boolean trackManualFishing = false;
 
     public static void load() {
         if (FILE.exists()) {
@@ -33,6 +34,7 @@ public class AutoFishConfig {
                 INSTANCE.randomMovement = config.randomMovement;
                 INSTANCE.jumpMovement = config.jumpMovement;
                 INSTANCE.catchMythical = config.catchMythical;
+                INSTANCE.trackManualFishing = config.trackManualFishing;
             } catch (Exception e) {
                 e.printStackTrace();
             }

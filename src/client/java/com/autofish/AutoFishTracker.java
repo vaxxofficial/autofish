@@ -30,11 +30,13 @@ public class AutoFishTracker {
     }
 
     public static void onMessage(String text) {
-        if (AutoFishClient.INSTANCE == null || !AutoFishClient.INSTANCE.enabled) return;
+        if (AutoFishClient.INSTANCE == null) return;
+        
+        // Only ignore the catch if AutoFish is OFF *and* Track Manual Fishing is OFF
+        if (!AutoFishClient.INSTANCE.enabled && !AutoFishConfig.INSTANCE.trackManualFishing) return;
 
         String plain = text.replaceAll("§.", "");
         
-        // Currency & Experience Check
         Matcher mCurr = Pattern.compile("You caught (?:an? )?([\\d,]+) (.*)!").matcher(plain);
         if (mCurr.matches()) {
             String specificType = mCurr.group(2).toLowerCase();
