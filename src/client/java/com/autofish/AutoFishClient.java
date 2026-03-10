@@ -79,6 +79,7 @@ public class AutoFishClient implements ClientModInitializer {
         AutoFishConfig.load();
         AutoFishStats.load();
         AutoFishTracker.loadCategories();
+        AutoFishHud.register();
         
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             AutoFishTracker.onMessage(message.getString());
