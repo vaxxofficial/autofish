@@ -3,6 +3,7 @@ package com.autofish;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
@@ -19,6 +20,17 @@ public class AutoFishScreen {
 
         ConfigCategory general = builder.getOrCreateCategory(Text.literal("General"));
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
+
+        // New Mod Toggle Entry
+        general.addEntry(entryBuilder.startBooleanToggle(Text.literal("Mod Enabled"), AutoFishClient.INSTANCE.enabled)
+                .setDefaultValue(false)
+                .setTooltip(Text.literal("Turn the AutoFish mod on or off."))
+                .setSaveConsumer(newValue -> {
+                    if (AutoFishClient.INSTANCE.enabled != newValue) {
+                        AutoFishClient.INSTANCE.setEnabled(newValue, MinecraftClient.getInstance(), null);
+                    }
+                })
+                .build());
 
         general.addEntry(entryBuilder.startBooleanToggle(Text.literal("Random Movement"), AutoFishConfig.INSTANCE.randomMovement)
                 .setDefaultValue(false)

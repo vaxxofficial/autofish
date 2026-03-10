@@ -172,7 +172,7 @@ public class AutoFishClient implements ClientModInitializer {
 
     // --- Command Helper Methods ---
     
-    private void setEnabled(boolean newState, MinecraftClient client, FabricClientCommandSource source) {
+    public void setEnabled(boolean newState, MinecraftClient client, FabricClientCommandSource source) {
         enabled = newState;
         if (enabled && client != null && client.player != null) {
             if (client.player.fishHook != null) {
