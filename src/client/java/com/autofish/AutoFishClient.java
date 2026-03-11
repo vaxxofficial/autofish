@@ -381,13 +381,13 @@ public class AutoFishClient implements ClientModInitializer {
                 setState(FishingState.SETTLING);
                 tickDelay = rand(SETTLE_MIN, SETTLE_MAX);
                 settlingTimeout = 60;
-                if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
+                if (random.nextInt(6) == 0) postCatchDelay = rand(15, 40);
             }
             case MYTHICAL_WAITING -> {
                 if (bobber == null || bobber.isRemoved()) {
                     setState(FishingState.IDLE);
                     tickDelay = 15;
-                    if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
+                    if (random.nextInt(6) == 0) postCatchDelay = rand(15, 40);
                     return;
                 }
                 if (bobberSpeedSq > 0.0005) mythicalReactionTimer = rand(4, 6); 
@@ -403,7 +403,7 @@ public class AutoFishClient implements ClientModInitializer {
                 if (bobber == null || bobber.isRemoved()) {
                     setState(FishingState.IDLE);
                     tickDelay = 15;
-                    if (random.nextInt(8) == 0) postCatchDelay = rand(15, 40);
+                    if (random.nextInt(6) == 0) postCatchDelay = rand(15, 40);
                     return;
                 }
                 if (bobberSpeedSq <= 0.0005) mythicalReactionTimer = rand(3, 5); 
